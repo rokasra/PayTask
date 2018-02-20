@@ -1,4 +1,4 @@
-#Paleidimas
+# Paleidimas
 
 ### Prisijungimas į docker konteinerį
 docker exec -it -u www-data app_pay_task bash
