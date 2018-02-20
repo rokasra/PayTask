@@ -8,6 +8,7 @@ composer install
 
 ### Komnados paleidimas, kad paskaičiuotų komisinius
 bin/console app:commissions-calculate public/input.csv
+
 'public/input.csv', vieta iš kur imamas failas
 
 ### Testų paleidimas
