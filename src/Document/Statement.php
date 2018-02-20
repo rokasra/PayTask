@@ -7,6 +7,12 @@ namespace App\Document;
  */
 class Statement
 {
+    const INPUT_TYPE_NATURAL = 'natural';
+    const INPUT_TYPE_LEGAL = 'legal';
+
+    const INPUT_CASH_IN = 'cash_in';
+    const INPUT_CASH_OUT = 'cash_out';
+
     /**
      * @var \DateTimeInterface
      */

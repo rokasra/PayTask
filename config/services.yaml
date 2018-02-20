@@ -30,6 +30,12 @@ services:
         class: App\Service\CommissionsManager
         arguments:
           - '@service.currency_converter'
+          - '@service.math_money_manager'
 
     service.currency_converter:
         class: App\Service\CurrencyConverter
+
+    service.math_money_manager:
+        class: App\Service\MathMoneyManager
+        arguments:
+          - '@service.currency_converter'

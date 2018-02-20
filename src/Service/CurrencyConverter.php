@@ -11,40 +11,19 @@ use App\Interfaces\CurrencyInterface;
 class CurrencyConverter implements CurrencyInterface
 {
     /**
-     * @param Money $money
+     * @param Money  $money
+     * @param string $currency
      *
-     * @return Money|null
-     */
-    public function convertToBase(Money $money)
-    {
-        if ($money->getCurrency() === CurrencyInterface::BASE_CURRENCY) {
-            return $money;
-        }
-
-        $currencyRate = $this->getCurrencyRate($money->getCurrency());
-        if ($currencyRate === null) {
-
-            return null;
-        }
-        $result = new Money(
-            $money->getAmount() / $currencyRate,
-            CurrencyInterface::BASE_CURRENCY
-        );
-
-        return $result;
-    }
-
-    /**
-     * {@inheritdoc}
+     * @return Money
      */
     public function convert(Money $money, $currency)
     {
         if ($money->getCurrency() === $currency) {
             return $money;
         }
-        $currencyRate = $this->getCurrencyRate($currency);
+        $currencyRate = $this->getCurrencyRate($money->getCurrency(), $currency);
         if ($currencyRate === null) {
-            return null;
+            return $money;
         }
         $result = new Money(
             $money->getAmount() * $currencyRate,
@@ -56,16 +35,27 @@ class CurrencyConverter implements CurrencyInterface
 
     /**
      * @param string $currency
+     * @param string $actualCurrency
      *
-     * @return string|null
+     * @return float|null
      */
-    protected function getCurrencyRate($currency)
+    protected function getCurrencyRate($currency, $actualCurrency)
     {
-        if (!array_key_exists($currency, self::CURRENCY_RATE)) {
+        $selectCurrency = $actualCurrency;
+        if ($actualCurrency == CurrencyInterface::BASE_CURRENCY) {
+            $selectCurrency = $currency;
+        }
+
+        if (!array_key_exists($selectCurrency, CurrencyInterface::CURRENCY_RATE)) {
 
             return null;
         }
 
-        return self::CURRENCY_RATE[$currency];
+        $rate = CurrencyInterface::CURRENCY_RATE[$selectCurrency];
+        if ($actualCurrency == CurrencyInterface::BASE_CURRENCY) {
+            $rate = 1 / $rate;
+        }
+
+        return $rate;
     }
 }

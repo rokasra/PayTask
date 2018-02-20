@@ -11,16 +11,14 @@ use App\Interfaces\CurrencyInterface;
  */
 class CommissionsManager implements CurrencyInterface
 {
-    const INPUT_TYPE_NATURAL = 'natural';
-    const INPUT_TYPE_LEGAL = 'legal';
-
-    const INPUT_CASH_IN = 'cash_in';
-    const INPUT_CASH_OUT = 'cash_out';
-
     /**
      * @var CurrencyConverter
      */
     protected $currencyConverter;
+    /**
+     * @var MathMoneyManager
+     */
+    protected $mathMoneyManager;
 
     /**
      * @var Statement[]
@@ -31,11 +29,14 @@ class CommissionsManager implements CurrencyInterface
      * Class constructor
      *
      * @param CurrencyConverter $currencyConverter
+     * @param MathMoneyManager  $mathMoneyManager
      */
     public function __construct(
-        CurrencyConverter $currencyConverter
+        CurrencyConverter $currencyConverter,
+        MathMoneyManager $mathMoneyManager
     ) {
         $this->currencyConverter = $currencyConverter;
+        $this->mathMoneyManager = $mathMoneyManager;
     }
 
     /**
@@ -58,14 +59,12 @@ class CommissionsManager implements CurrencyInterface
         }
 
         foreach ($this->statements as $statement) {
-            if ($statement->getCash() == self::INPUT_CASH_IN) {
+            if ($statement->getCash() == Statement::INPUT_CASH_IN) {
                 $this->setCashIn($statement);
-            } elseif ($statement->getCash() == self::INPUT_CASH_OUT && $statement->getType() == self::INPUT_TYPE_NATURAL) {
+            } elseif ($statement->getCash() == Statement::INPUT_CASH_OUT && $statement->getType() == Statement::INPUT_TYPE_NATURAL) {
                 $this->setCashOutNatural($statement);
-            } elseif ($statement->getCash() == self::INPUT_CASH_OUT && $statement->getType() == self::INPUT_TYPE_LEGAL) {
-                $this->setCashOutLegal($statement);
             } else {
-                continue;
+                $this->setCashOutLegal($statement);
             }
         }
 
@@ -77,21 +76,18 @@ class CommissionsManager implements CurrencyInterface
      */
     protected function setCashIn($statement)
     {
-        $maxAmount = 5;
+        $maxAmount = new Money(5, CurrencyInterface::BASE_CURRENCY);
         $taxPercent = 0.0003;
-        $commissions = $statement->getMoney()->getAmount() * $taxPercent;
-        $statementCurrency = $statement->getMoney()->getCurrency();
-        $commissionsConverted = $this->currencyConverter->convertToBase(new Money($commissions, $statementCurrency));
 
-        if ($commissionsConverted->getAmount() < $maxAmount) {
-            $statement->setCommissions(new Money($commissions, $statementCurrency));
+        $commissions = $this->mathMoneyManager->mul($statement->getMoney(), $taxPercent);
+        if ($this->mathMoneyManager->compare($commissions, $maxAmount) < 0) {
+            $this->setCommissions($statement, $commissions);
         } else {
-            $statement->setCommissions(
-                $this->currencyConverter->convert(
-                    new Money($maxAmount, self::BASE_CURRENCY),
-                    $statementCurrency
-                )
+            $commissions = $this->currencyConverter->convert(
+                $maxAmount,
+                $statement->getMoney()->getCurrency()
             );
+            $this->setCommissions($statement, $commissions);
         }
     }
 
@@ -100,19 +96,17 @@ class CommissionsManager implements CurrencyInterface
      */
     protected function setCashOutLegal($statement)
     {
-        $minAmount = 0.5;
+        $minAmount = new Money(0.5, CurrencyInterface::BASE_CURRENCY);
         $taxPercent = 0.003;
-        $commissions = $statement->getMoney()->getAmount() * $taxPercent;
-        $statementCurrency = $statement->getMoney()->getCurrency();
-        $commissionsConverted = $this->currencyConverter->convertToBase(new Money($commissions, $statementCurrency));
 
-        if ($commissionsConverted->getAmount() > $minAmount) {
-            $statement->setCommissions(new Money($commissions, $statementCurrency));
+        $commissions = $this->mathMoneyManager->mul($statement->getMoney(), $taxPercent);
+        if ($this->mathMoneyManager->compare($commissions, $minAmount) > 0) {
+            $statement->setCommissions($commissions);
         } else {
             $statement->setCommissions(
                 $this->currencyConverter->convert(
-                    new Money($minAmount, self::BASE_CURRENCY),
-                    $statementCurrency
+                    $minAmount,
+                    $statement->getMoney()->getCurrency()
                 )
             );
         }
@@ -123,18 +117,30 @@ class CommissionsManager implements CurrencyInterface
      */
     protected function setCashOutNatural($statement)
     {
-        $freeTransactions = 3;
-        $maxAmount = 1000;
+        $transactionsFreeLimit = 3;
+        $maxAmount = new Money(1000, CurrencyInterface::BASE_CURRENCY);
         $taxPercent = 0.003;
 
         $clientStatements = $this->getActualStatements($statement);
-
-        if (count($clientStatements) > $freeTransactions) {
-            $commissions = $statement->getMoney()->getAmount() * $taxPercent;
-            $statement->setCommissions(new Money($commissions, $statement->getMoney()->getCurrency()));
+        if (count($clientStatements) >= $transactionsFreeLimit) {
+            $commissions = $this->mathMoneyManager->mul($statement->getMoney(), $taxPercent);
         } else {
-//            TODO:
+            $sumCash = new Money(0, CurrencyInterface::BASE_CURRENCY);
+            foreach ($clientStatements as $cStatment) {
+                $sumCash = $this->mathMoneyManager->add($sumCash, $cStatment->getMoney());
+            }
+            $allCashMoney = $this->mathMoneyManager->add($statement->getMoney(), $sumCash);
+            if ($this->mathMoneyManager->compare($sumCash, $maxAmount) >= 0) {
+                $commissions = $this->mathMoneyManager->mul($statement->getMoney(), $taxPercent);
+            } elseif ($this->mathMoneyManager->compare($allCashMoney, $maxAmount) < 0) {
+                $commissions = new Money(0, $statement->getMoney()->getCurrency());
+            } else {
+                $commissions = $this->mathMoneyManager->sub($allCashMoney, $maxAmount);
+                $commissions = $this->mathMoneyManager->mul($commissions, $taxPercent);
+            }
         }
+
+        $this->setCommissions($statement, $commissions);
     }
 
     /**
@@ -147,7 +153,6 @@ class CommissionsManager implements CurrencyInterface
         $monday = (new \DateTime(
             sprintf('Monday this week %s', $statement->getDate()->format('Y-m-d'))
         ));
-
         $return = [];
         foreach ($this->statements as $cacheStatement) {
             if ($statement->getHash() == $cacheStatement->getHash()) {
@@ -155,7 +160,7 @@ class CommissionsManager implements CurrencyInterface
             }
 
             if (
-                $cacheStatement->getCash() == self::INPUT_CASH_OUT &&
+                $cacheStatement->getCash() == Statement::INPUT_CASH_OUT &&
                 $cacheStatement->getDate() >= $monday &&
                 $cacheStatement->getClientId() == $statement->getClientId()
             ) {
@@ -176,8 +181,8 @@ class CommissionsManager implements CurrencyInterface
         if (
             count($row) != 6 ||
             !preg_match('~^\d{4}\-\d{2}\-\d{2}$~', $row[0]) ||
-            !in_array($row[2], [self::INPUT_TYPE_NATURAL, self::INPUT_TYPE_LEGAL]) ||
-            !in_array($row[3], [self::INPUT_CASH_IN, self::INPUT_CASH_OUT]) ||
+            !in_array($row[2], [Statement::INPUT_TYPE_NATURAL, Statement::INPUT_TYPE_LEGAL]) ||
+            !in_array($row[3], [Statement::INPUT_CASH_IN, Statement::INPUT_CASH_OUT]) ||
             (float) $row[4] <= 0 ||
             !array_key_exists($row[5], CurrencyInterface::CURRENCY_RATE)
         ) {
@@ -186,5 +191,20 @@ class CommissionsManager implements CurrencyInterface
         }
 
         return true;
+    }
+
+    /**
+     * @param Statement $statement
+     * @param Money     $money
+     *
+     * @return static
+     */
+    protected function setCommissions(Statement $statement, Money $money)
+    {
+        $precision = CurrencyInterface::CURRENCY_PRECISION[$money->getCurrency()];
+        $money = $this->mathMoneyManager->ceil($money, $precision);
+        $statement->setCommissions($money);
+
+        return $this;
     }
 }

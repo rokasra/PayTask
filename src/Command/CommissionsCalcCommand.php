@@ -2,6 +2,7 @@
 
 namespace App\Command;
 
+use App\Interfaces\CurrencyInterface;
 use App\Service\CommissionsManager;
 use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
 use Symfony\Component\Console\Input\InputArgument;
@@ -32,9 +33,12 @@ class CommissionsCalcCommand extends ContainerAwareCommand
 
         $file = $input->getArgument('file');
         $data = $this->parseCsvFile($file);
-        $manager->calculate($data);
+        $results = $manager->calculate($data);
 
-        $output->writeln('Done calculate');
+        foreach ($results as $result) {
+            $commissions = $result->getCommissions();
+            $output->writeln(number_format($commissions->getAmount(), CurrencyInterface::CURRENCY_PRECISION[$commissions->getCurrency()], '.', ''));
+        }
     }
 
     /**

@@ -13,4 +13,9 @@ interface CurrencyInterface
         'USD' => 1.497,
         'JPY' => 129.53,
     ];
+    const CURRENCY_PRECISION = [
+        'EUR' => 2,
+        'USD' => 2,
+        'JPY' => 0,
+    ];
 }
