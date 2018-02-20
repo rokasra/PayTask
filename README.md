@@ -13,5 +13,5 @@ bin/console app:commissions-calculate public/input.csv
 
 ### Testų paleidimas
 ./vendor/bin/phpunit --bootstrap vendor/autoload.php src/Tests
-### Testų paleidimas su padengimu į test direktoriją
+### Testų paleidimas su padengimu į tests direktoriją
 ./vendor/bin/phpunit --bootstrap vendor/autoload.php src/Tests --coverage-html /var/www/html/tests
