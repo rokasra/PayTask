@@ -179,6 +179,7 @@ class CommissionsManager implements CurrencyInterface
     protected function validateRow($row)
     {
         if (
+            empty($row) ||
             count($row) != 6 ||
             !preg_match('~^\d{4}\-\d{2}\-\d{2}$~', $row[0]) ||
             !in_array($row[2], [Statement::INPUT_TYPE_NATURAL, Statement::INPUT_TYPE_LEGAL]) ||
